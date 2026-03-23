@@ -269,6 +269,7 @@ details.host-block[open] > .host-header .host-chevron { transform: rotate(90deg)
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 0.75rem;
+  align-items: start;
 }
 
 .port-card {
@@ -321,28 +322,6 @@ details.host-block[open] > .host-header .host-chevron { transform: rotate(90deg)
 .port-add { border-style: dashed; border-color: var(--border2); background: transparent; }
 .port-add::before { display: none; }
 .add-port-form { display: flex; flex-direction: column; gap: 0.4rem; }
-
-.port-add-summary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  min-height: 60px;
-  cursor: pointer;
-  color: var(--text3);
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  transition: color 0.15s;
-  user-select: none;
-}
-.port-add-summary:hover { color: var(--accent); }
-details.port-add[open] .port-add-summary {
-  color: var(--accent);
-  min-height: auto;
-  margin-bottom: 0.5rem;
-  justify-content: flex-start;
-}
 .btn-add {
   background: var(--accent);
   color: #000;
