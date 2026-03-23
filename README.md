@@ -69,6 +69,10 @@ docker compose pull
 docker compose up -d --build
 ```
 
+## Screenshots
+
+![Dashboard Screenshot](screenshots/dashboard.png)
+
 ## Struktur
 
 ```
