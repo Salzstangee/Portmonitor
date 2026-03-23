@@ -44,149 +44,130 @@
     </div>
   </div>
 
+  <!-- ── Host Block Macro ── -->
+  {% macro render_host(host, host_ports, uptime) %}
+    {% set up_c = host_ports | selectattr("last_status", "equalto", 1) | list | length %}
+    {% set down_c = host_ports | selectattr("last_status", "equalto", 0) | list | length %}
+    {% set known_c = up_c + down_c %}
+    {% if known_c == 0 %}{% set hclass = "" %}
+    {% elif down_c == 0 %}{% set hclass = "host-all-up" %}
+    {% else %}{% set hclass = "host-has-down" %}{% endif %}
+
+    <details class="host-block {{ hclass }}" open>
+      <summary class="host-header">
+        <div class="host-header-left">
+          <span class="host-chevron">›</span>
+          <span class="host-status-dot"></span>
+          <span class="host-name">{{ host.name }}</span>
+          <span class="host-ip">{{ host.ip }}</span>
+        </div>
+        <div class="host-header-right">
+          {% if known_c > 0 %}
+            <span class="host-summary{% if down_c > 0 %} hs-has-down{% endif %}">
+              <span class="hs-up">{{ up_c }}</span>/{{ host_ports | length }} UP
+            </span>
+          {% endif %}
+          <form action="/hosts/delete/{{ host.id }}" method="post" class="inline-form">
+            <button type="submit" class="btn-icon danger" onclick="return confirm('Host löschen?')">✕</button>
+          </form>
+        </div>
+      </summary>
+
+      <div class="host-ports">
+        <div class="ports-grid">
+          {% for p in host_ports %}
+          <div class="port-card {% if p.last_status == 1 %}port-up{% elif p.last_status == 0 %}port-down{% else %}port-unknown{% endif %}">
+            <div class="port-top">
+              <span class="port-num">:{{ p.port }}</span>
+              <span id="status-{{ p.id }}" class="badge {% if p.last_status == 1 %}up{% elif p.last_status == 0 %}down{% else %}unknown{% endif %}">
+                {% if p.last_status == 1 %}UP{% elif p.last_status == 0 %}DOWN{% else %}?{% endif %}
+              </span>
+            </div>
+            {% if p.label %}<div class="port-label">{{ p.label }}</div>{% endif %}
+            <div class="port-meta">
+              <span class="uptime-badge">{% if uptime[p.id] >= 0 %}{{ uptime[p.id] }}% 24h{% else %}No data{% endif %}</span>
+              <span id="ms-{{ p.id }}" class="ms-badge">{% if p.last_checked %}checked{% endif %}</span>
+            </div>
+            <div class="port-actions">
+              <button hx-post="/ports/check/{{ p.id }}" hx-target="#ms-{{ p.id }}" hx-swap="outerHTML" class="btn-check">⟳ Check</button>
+              <a href="/history/{{ p.id }}" class="btn-history">History</a>
+              <form action="/ports/delete/{{ p.id }}" method="post" class="inline-form">
+                <button type="submit" class="btn-icon danger">✕</button>
+              </form>
+            </div>
+          </div>
+          {% endfor %}
+
+          <!-- Add Port (collapsible) -->
+          <details class="port-card port-add">
+            <summary class="port-add-summary">+ Port</summary>
+            <form action="/ports/add" method="post" class="add-port-form">
+              <input type="hidden" name="host_id" value="{{ host.id }}">
+              <input type="number" name="port" placeholder="Port" min="1" max="65535" required class="inp">
+              <input type="text" name="label" placeholder="Label (opt.)" class="inp">
+              <select name="check_interval" class="inp">
+                <option value="1">1 min</option>
+                <option value="2">2 min</option>
+                <option value="5" selected>5 min</option>
+                <option value="10">10 min</option>
+                <option value="15">15 min</option>
+                <option value="30">30 min</option>
+                <option value="60">60 min</option>
+              </select>
+              <input type="email" name="alert_email" placeholder="Alert-Email (opt.)" class="inp">
+              <button type="submit" class="btn-add">Hinzufügen</button>
+            </form>
+          </details>
+        </div>
+      </div>
+    </details>
+  {% endmacro %}
+
   <div class="grid-layout">
 
     <!-- Left: Main Content -->
     <div class="main-col">
 
-      <!-- Groups & Ports -->
       {% set ungrouped_hosts = hosts | selectattr("group_id", "none") | list %}
+
       {% for group in groups %}
         {% set group_hosts = hosts | selectattr("group_id", "equalto", group.id) | list %}
         {% if group_hosts %}
-        <section class="group-section">
-          <div class="group-header">
-            <h2>{{ group.name }}</h2>
-            {% if group.description %}<span class="group-desc">{{ group.description }}</span>{% endif %}
-            <form action="/groups/delete/{{ group.id }}" method="post" class="inline-form">
-              <button type="submit" class="btn-icon danger" onclick="return confirm('Group löschen?')">✕</button>
-            </form>
-          </div>
-          {% for host in group_hosts %}
-            {% set host_ports = ports | selectattr("host_id", "equalto", host.id) | list %}
-            <div class="host-block">
-              <div class="host-header">
-                <span class="host-name">{{ host.name }}</span>
-                <span class="host-ip">{{ host.ip }}</span>
-                <form action="/hosts/delete/{{ host.id }}" method="post" class="inline-form">
-                  <button type="submit" class="btn-icon danger" onclick="return confirm('Host löschen?')">✕</button>
-                </form>
-              </div>
-              <div class="ports-grid">
-                {% for p in host_ports %}
-                <div class="port-card {% if p.last_status == 1 %}port-up{% elif p.last_status == 0 %}port-down{% else %}port-unknown{% endif %}">
-                  <div class="port-top">
-                    <span class="port-num">:{{ p.port }}</span>
-                    <span id="status-{{ p.id }}" class="badge {% if p.last_status == 1 %}up{% elif p.last_status == 0 %}down{% else %}unknown{% endif %}">
-                      {% if p.last_status == 1 %}UP{% elif p.last_status == 0 %}DOWN{% else %}?{% endif %}
-                    </span>
-                  </div>
-                  {% if p.label %}<div class="port-label">{{ p.label }}</div>{% endif %}
-                  <div class="port-meta">
-                    <span class="uptime-badge">
-                      {% if uptime[p.id] >= 0 %}{{ uptime[p.id] }}% 24h{% else %}No data{% endif %}
-                    </span>
-                    <span id="ms-{{ p.id }}" class="ms-badge">
-                      {% if p.last_checked %}checked{% endif %}
-                    </span>
-                  </div>
-                  <div class="port-actions">
-                    <button hx-post="/ports/check/{{ p.id }}" hx-target="#ms-{{ p.id }}"
-                            hx-swap="outerHTML" class="btn-check">⟳ Check</button>
-                    <a href="/history/{{ p.id }}" class="btn-history">History</a>
-                    <form action="/ports/delete/{{ p.id }}" method="post" class="inline-form">
-                      <button type="submit" class="btn-icon danger">✕</button>
-                    </form>
-                  </div>
-                </div>
-                {% endfor %}
-                <!-- Add Port inline -->
-                <div class="port-card port-add">
-                  <form action="/ports/add" method="post" class="add-port-form">
-                    <input type="hidden" name="host_id" value="{{ host.id }}">
-                    <input type="number" name="port" placeholder="Port" min="1" max="65535" required class="inp">
-                    <input type="text" name="label" placeholder="Label (opt.)" class="inp">
-                    <select name="check_interval" class="inp">
-                      <option value="1">1 min</option>
-                      <option value="2">2 min</option>
-                      <option value="5" selected>5 min</option>
-                      <option value="10">10 min</option>
-                      <option value="15">15 min</option>
-                      <option value="30">30 min</option>
-                      <option value="60">60 min</option>
-                    </select>
-                    <input type="email" name="alert_email" placeholder="Alert-Email (opt.)" class="inp">
-                    <button type="submit" class="btn-add">+ Port</button>
-                  </form>
-                </div>
-              </div>
-            </div>
+          {# Group port summary #}
+          {% set ns = namespace(up=0, total=0) %}
+          {% for h in group_hosts %}
+            {% set hp = ports | selectattr("host_id", "equalto", h.id) | list %}
+            {% set ns.total = ns.total + (hp | length) %}
+            {% set ns.up = ns.up + (hp | selectattr("last_status", "equalto", 1) | list | length) %}
           {% endfor %}
-        </section>
+
+          <section class="group-section">
+            <div class="group-header">
+              <h2>{{ group.name }}</h2>
+              {% if group.description %}<span class="group-desc">{{ group.description }}</span>{% endif %}
+              {% if ns.total > 0 %}
+                <span class="group-badge{% if ns.up < ns.total %} gb-warn{% endif %}">{{ ns.up }}/{{ ns.total }}</span>
+              {% endif %}
+              <form action="/groups/delete/{{ group.id }}" method="post" class="inline-form ml-auto">
+                <button type="submit" class="btn-icon danger" onclick="return confirm('Group löschen?')">✕</button>
+              </form>
+            </div>
+            {% for host in group_hosts %}
+              {% set host_ports = ports | selectattr("host_id", "equalto", host.id) | list %}
+              {{ render_host(host, host_ports, uptime) }}
+            {% endfor %}
+          </section>
         {% endif %}
       {% endfor %}
 
-      <!-- Ungrouped hosts -->
       {% if ungrouped_hosts %}
-      <section class="group-section">
-        <div class="group-header"><h2>Ungrouped</h2></div>
-        {% for host in ungrouped_hosts %}
-          {% set host_ports = ports | selectattr("host_id", "equalto", host.id) | list %}
-          <div class="host-block">
-            <div class="host-header">
-              <span class="host-name">{{ host.name }}</span>
-              <span class="host-ip">{{ host.ip }}</span>
-              <form action="/hosts/delete/{{ host.id }}" method="post" class="inline-form">
-                <button type="submit" class="btn-icon danger" onclick="return confirm('Host löschen?')">✕</button>
-              </form>
-            </div>
-            <div class="ports-grid">
-              {% for p in host_ports %}
-              <div class="port-card {% if p.last_status == 1 %}port-up{% elif p.last_status == 0 %}port-down{% else %}port-unknown{% endif %}">
-                <div class="port-top">
-                  <span class="port-num">:{{ p.port }}</span>
-                  <span id="status-{{ p.id }}" class="badge {% if p.last_status == 1 %}up{% elif p.last_status == 0 %}down{% else %}unknown{% endif %}">
-                    {% if p.last_status == 1 %}UP{% elif p.last_status == 0 %}DOWN{% else %}?{% endif %}
-                  </span>
-                </div>
-                {% if p.label %}<div class="port-label">{{ p.label }}</div>{% endif %}
-                <div class="port-meta">
-                  <span class="uptime-badge">
-                    {% if uptime[p.id] >= 0 %}{{ uptime[p.id] }}% 24h{% else %}No data{% endif %}
-                  </span>
-                </div>
-                <div class="port-actions">
-                  <button hx-post="/ports/check/{{ p.id }}" hx-target="#ms-{{ p.id }}"
-                          hx-swap="outerHTML" class="btn-check">⟳ Check</button>
-                  <a href="/history/{{ p.id }}" class="btn-history">History</a>
-                  <form action="/ports/delete/{{ p.id }}" method="post" class="inline-form">
-                    <button type="submit" class="btn-icon danger">✕</button>
-                  </form>
-                </div>
-              </div>
-              {% endfor %}
-              <div class="port-card port-add">
-                <form action="/ports/add" method="post" class="add-port-form">
-                  <input type="hidden" name="host_id" value="{{ host.id }}">
-                  <input type="number" name="port" placeholder="Port" required class="inp">
-                  <input type="text" name="label" placeholder="Label (opt.)" class="inp">
-                  <select name="check_interval" class="inp">
-                    <option value="1">1 min</option>
-                    <option value="2">2 min</option>
-                    <option value="5" selected>5 min</option>
-                    <option value="10">10 min</option>
-                    <option value="15">15 min</option>
-                    <option value="30">30 min</option>
-                    <option value="60">60 min</option>
-                  </select>
-                  <input type="email" name="alert_email" placeholder="Alert-Email (opt.)" class="inp">
-                  <button type="submit" class="btn-add">+ Port</button>
-                </form>
-              </div>
-            </div>
-          </div>
-        {% endfor %}
-      </section>
+        <section class="group-section">
+          <div class="group-header"><h2>Ungrouped</h2></div>
+          {% for host in ungrouped_hosts %}
+            {% set host_ports = ports | selectattr("host_id", "equalto", host.id) | list %}
+            {{ render_host(host, host_ports, uptime) }}
+          {% endfor %}
+        </section>
       {% endif %}
 
       {% if not hosts %}
@@ -200,7 +181,6 @@
     <!-- Right: Sidebar -->
     <aside class="sidebar">
 
-      <!-- Add Group -->
       <div class="sidebar-card">
         <h3>+ Gruppe</h3>
         <form action="/groups/add" method="post" class="sidebar-form">
@@ -210,7 +190,6 @@
         </form>
       </div>
 
-      <!-- Add Host -->
       <div class="sidebar-card">
         <h3>+ Host</h3>
         <form action="/hosts/add" method="post" class="sidebar-form">
@@ -226,7 +205,6 @@
         </form>
       </div>
 
-      <!-- Groups List -->
       {% if groups %}
       <div class="sidebar-card">
         <h3>Gruppen</h3>
