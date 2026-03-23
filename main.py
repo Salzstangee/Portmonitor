@@ -1,18 +1,26 @@
 import asyncio
+import logging
+import os
+import re
 import socket
 import smtplib
 import sqlite3
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from typing import Optional
-import os
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
+
+VALID_INTERVALS = {1, 2, 5, 10, 15, 30, 60}
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 DB_PATH = os.environ.get("DB_PATH", "portmonitor.db")
 
@@ -75,7 +83,15 @@ def check_port(ip: str, port: int, timeout: float = 3.0) -> tuple[bool, int]:
         with socket.create_connection((ip, port), timeout=timeout):
             ms = int((datetime.now() - start).total_seconds() * 1000)
             return True, ms
-    except Exception:
+    except (socket.timeout, TimeoutError):
+        ms = int((datetime.now() - start).total_seconds() * 1000)
+        return False, ms
+    except (socket.gaierror, socket.herror) as e:
+        logger.warning("DNS/host error for %s:%d – %s", ip, port, e)
+        ms = int((datetime.now() - start).total_seconds() * 1000)
+        return False, ms
+    except OSError as e:
+        logger.warning("Connection error for %s:%d – %s", ip, port, e)
         ms = int((datetime.now() - start).total_seconds() * 1000)
         return False, ms
 
@@ -86,7 +102,7 @@ def send_alert(email: str, host_name: str, ip: str, port: int, status: bool, set
     body = (
         f"Port check result for {host_name} ({ip}):{port}\n\n"
         f"Status: {'OPEN (up)' if status else 'CLOSED (down)'}\n"
-        f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC"
     )
     try:
         msg = MIMEText(body)
@@ -98,10 +114,14 @@ def send_alert(email: str, host_name: str, ip: str, port: int, status: bool, set
             if settings["smtp_user"]:
                 s.login(settings["smtp_user"], settings["smtp_pass"])
             s.send_message(msg)
-    except Exception as e:
-        print(f"Mail error: {e}")
+    except smtplib.SMTPAuthenticationError as e:
+        logger.error("SMTP auth failed: %s", e)
+    except smtplib.SMTPException as e:
+        logger.error("SMTP error sending alert to %s: %s", email, e)
+    except (OSError, ValueError) as e:
+        logger.error("Mail connection error: %s", e)
 
-def run_checks_for_interval(interval: int):
+async def run_checks_for_interval(interval: int):
     conn = get_db()
     settings = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM settings").fetchall()}
     ports = conn.execute("""
@@ -109,9 +129,20 @@ def run_checks_for_interval(interval: int):
         FROM ports p JOIN hosts h ON h.id = p.host_id
         WHERE p.check_interval = ?
     """, (interval,)).fetchall()
-    now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
-    for p in ports:
-        ok, ms = check_port(p["ip"], p["port"])
+    conn.close()
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    results = await asyncio.gather(
+        *[asyncio.to_thread(check_port, p["ip"], p["port"]) for p in ports],
+        return_exceptions=True,
+    )
+
+    conn = get_db()
+    for p, result in zip(ports, results):
+        if isinstance(result, Exception):
+            logger.error("Unexpected error checking %s:%d – %s", p["ip"], p["port"], result)
+            continue
+        ok, ms = result
         status = 1 if ok else 0
         conn.execute("INSERT INTO checks (port_id, status, response_ms, checked_at) VALUES (?,?,?,?)",
                      (p["id"], status, ms, now))
@@ -133,8 +164,11 @@ scheduler = AsyncIOScheduler()
 
 def setup_scheduler():
     for interval in [1, 2, 5, 10, 15, 30, 60]:
-        scheduler.add_job(run_checks_for_interval, "interval", minutes=interval,
-                          args=[interval], id=f"check_{interval}", replace_existing=True)
+        scheduler.add_job(
+            run_checks_for_interval, "interval", minutes=interval,
+            args=[interval], id=f"check_{interval}", replace_existing=True,
+            misfire_grace_time=30,
+        )
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -206,8 +240,11 @@ async def history(request: Request, port_id: int):
 # Groups
 @app.post("/groups/add")
 async def add_group(name: str = Form(...), description: str = Form("")):
+    name = name.strip()
+    if not name:
+        raise HTTPException(400, "Gruppenname darf nicht leer sein")
     conn = get_db()
-    conn.execute("INSERT OR IGNORE INTO groups (name, description) VALUES (?,?)", (name.strip(), description))
+    conn.execute("INSERT OR IGNORE INTO groups (name, description) VALUES (?,?)", (name, description.strip()))
     conn.commit(); conn.close()
     return RedirectResponse("/", 303)
 
@@ -221,9 +258,15 @@ async def delete_group(gid: int):
 # Hosts
 @app.post("/hosts/add")
 async def add_host(name: str = Form(...), ip: str = Form(...), group_id: str = Form("")):
+    name = name.strip()
+    ip = ip.strip()
+    if not name:
+        raise HTTPException(400, "Hostname darf nicht leer sein")
+    if not ip:
+        raise HTTPException(400, "IP/Hostname darf nicht leer sein")
+    gid = int(group_id) if group_id.strip() else None
     conn = get_db()
-    gid = int(group_id) if group_id else None
-    conn.execute("INSERT INTO hosts (name, ip, group_id) VALUES (?,?,?)", (name.strip(), ip.strip(), gid))
+    conn.execute("INSERT INTO hosts (name, ip, group_id) VALUES (?,?,?)", (name, ip, gid))
     conn.commit(); conn.close()
     return RedirectResponse("/", 303)
 
@@ -239,9 +282,16 @@ async def delete_host(hid: int):
 async def add_port(host_id: int = Form(...), port: int = Form(...),
                    label: str = Form(""), check_interval: int = Form(5),
                    alert_email: str = Form("")):
+    if not (1 <= port <= 65535):
+        raise HTTPException(400, "Port muss zwischen 1 und 65535 liegen")
+    if check_interval not in VALID_INTERVALS:
+        raise HTTPException(400, f"Ungültiges Intervall: {check_interval}")
+    alert_email = alert_email.strip()
+    if alert_email and not _EMAIL_RE.match(alert_email):
+        raise HTTPException(400, "Ungültige E-Mail-Adresse")
     conn = get_db()
     conn.execute("""INSERT INTO ports (host_id, port, label, check_interval, alert_email)
-                    VALUES (?,?,?,?,?)""", (host_id, port, label.strip(), check_interval, alert_email.strip()))
+                    VALUES (?,?,?,?,?)""", (host_id, port, label.strip(), check_interval, alert_email))
     conn.commit(); conn.close()
     return RedirectResponse("/", 303)
 
@@ -258,9 +308,9 @@ async def manual_check(request: Request, pid: int):
     p = conn.execute("SELECT p.*, h.ip, h.name as host_name FROM ports p JOIN hosts h ON h.id=p.host_id WHERE p.id=?", (pid,)).fetchone()
     if not p:
         raise HTTPException(404)
-    ok, ms = check_port(p["ip"], p["port"])
+    ok, ms = await asyncio.to_thread(check_port, p["ip"], p["port"])
     status = 1 if ok else 0
-    now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     conn.execute("INSERT INTO checks (port_id, status, response_ms, checked_at) VALUES (?,?,?,?)", (pid, status, ms, now))
     conn.execute("UPDATE ports SET last_status=?, last_checked=? WHERE id=?", (status, now, pid))
     conn.commit(); conn.close()
@@ -280,9 +330,16 @@ async def settings_page(request: Request):
 async def save_settings(smtp_host: str = Form(""), smtp_port: str = Form("587"),
                         smtp_user: str = Form(""), smtp_pass: str = Form(""),
                         smtp_from: str = Form("")):
+    try:
+        port_num = int(smtp_port)
+        if not (1 <= port_num <= 65535):
+            raise ValueError
+    except ValueError:
+        raise HTTPException(400, "SMTP-Port muss eine Zahl zwischen 1 und 65535 sein")
     conn = get_db()
-    for k, v in [("smtp_host", smtp_host), ("smtp_port", smtp_port),
-                 ("smtp_user", smtp_user), ("smtp_pass", smtp_pass), ("smtp_from", smtp_from)]:
+    for k, v in [("smtp_host", smtp_host.strip()), ("smtp_port", smtp_port.strip()),
+                 ("smtp_user", smtp_user.strip()), ("smtp_pass", smtp_pass),
+                 ("smtp_from", smtp_from.strip())]:
         conn.execute("UPDATE settings SET value=? WHERE key=?", (v, k))
     conn.commit(); conn.close()
     return RedirectResponse("/settings", 303)
