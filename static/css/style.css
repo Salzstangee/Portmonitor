@@ -150,23 +150,102 @@ body {
 }
 .group-desc { font-size: 0.8rem; color: var(--text3); }
 
+/* Group badge */
+.group-badge {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--up);
+  background: var(--up-bg);
+  border: 1px solid var(--up-border);
+  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+}
+.group-badge.gb-warn { color: var(--down); background: var(--down-bg); border-color: var(--down-border); }
+
+.ml-auto { margin-left: auto; }
+
 /* ── Host Block ── */
 .host-block {
   background: var(--bg2);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--border2);
   border-radius: 12px;
   padding: 1rem 1.2rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   transition: border-color 0.2s;
 }
 .host-block:hover { border-color: var(--border2); }
+.host-all-up { border-left-color: var(--up) !important; }
+.host-has-down { border-left-color: var(--down) !important; }
+
+/* Details/summary reset */
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
 
 .host-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0;
+  cursor: pointer;
+  user-select: none;
 }
+details.host-block[open] > .host-header { margin-bottom: 1rem; }
+
+.host-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.host-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* Chevron */
+.host-chevron {
+  display: inline-block;
+  font-size: 1.1rem;
+  color: var(--text3);
+  transition: transform 0.2s;
+  width: 1rem;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+details.host-block[open] > .host-header .host-chevron { transform: rotate(90deg); }
+
+/* Status dot */
+.host-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border2);
+  flex-shrink: 0;
+}
+.host-all-up .host-status-dot { background: var(--up); box-shadow: 0 0 6px #00e67650; }
+.host-has-down .host-status-dot { background: var(--down); box-shadow: 0 0 6px #ff3d5a50; }
+
+/* Host summary badge */
+.host-summary {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--up);
+  background: var(--up-bg);
+  border: 1px solid var(--up-border);
+  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+  white-space: nowrap;
+}
+.host-summary.hs-has-down {
+  color: var(--down);
+  background: var(--down-bg);
+  border-color: var(--down-border);
+}
+
 .host-name {
   font-weight: 700;
   font-size: 0.95rem;
@@ -181,6 +260,9 @@ body {
   border-radius: 4px;
   border: 1px solid var(--border);
 }
+
+/* Host ports content */
+.host-ports { /* no extra padding needed */ }
 
 /* ── Ports Grid ── */
 .ports-grid {
@@ -239,6 +321,28 @@ body {
 .port-add { border-style: dashed; border-color: var(--border2); background: transparent; }
 .port-add::before { display: none; }
 .add-port-form { display: flex; flex-direction: column; gap: 0.4rem; }
+
+.port-add-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 60px;
+  cursor: pointer;
+  color: var(--text3);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  transition: color 0.15s;
+  user-select: none;
+}
+.port-add-summary:hover { color: var(--accent); }
+details.port-add[open] .port-add-summary {
+  color: var(--accent);
+  min-height: auto;
+  margin-bottom: 0.5rem;
+  justify-content: flex-start;
+}
 .btn-add {
   background: var(--accent);
   color: #000;
