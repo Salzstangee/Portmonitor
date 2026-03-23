@@ -1,0 +1,14 @@
+services:
+  portmonitor:
+    build: .
+    container_name: portmonitor
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - portmonitor_data:/data
+    environment:
+      - DB_PATH=/data/portmonitor.db
+
+volumes:
+  portmonitor_data:

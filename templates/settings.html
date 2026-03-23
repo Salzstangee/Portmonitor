@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings – PortMonitor</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">◈</span>
+    <span class="brand-name">PortMonitor</span>
+  </div>
+  <div class="nav-links">
+    <a href="/">Dashboard</a>
+    <a href="/settings" class="active">Settings</a>
+  </div>
+</nav>
+
+<main class="container">
+  <div class="settings-wrap">
+    <h1>Settings</h1>
+
+    <div class="settings-card">
+      <h2>📧 E-Mail Alerts (SMTP)</h2>
+      <p class="settings-hint">Konfiguriere SMTP, um Benachrichtigungen zu senden wenn ein Port down oder wieder up geht.</p>
+      <form action="/settings/save" method="post" class="settings-form">
+        <div class="form-row">
+          <label>SMTP Host</label>
+          <input type="text" name="smtp_host" value="{{ settings.smtp_host }}" placeholder="smtp.gmail.com" class="inp">
+        </div>
+        <div class="form-row">
+          <label>SMTP Port</label>
+          <input type="number" name="smtp_port" value="{{ settings.smtp_port }}" placeholder="587" class="inp">
+        </div>
+        <div class="form-row">
+          <label>Username</label>
+          <input type="text" name="smtp_user" value="{{ settings.smtp_user }}" placeholder="user@example.com" class="inp">
+        </div>
+        <div class="form-row">
+          <label>Password</label>
+          <input type="password" name="smtp_pass" value="{{ settings.smtp_pass }}" placeholder="••••••••" class="inp">
+        </div>
+        <div class="form-row">
+          <label>From Address</label>
+          <input type="email" name="smtp_from" value="{{ settings.smtp_from }}" placeholder="alerts@example.com" class="inp">
+        </div>
+        <button type="submit" class="btn-primary">Speichern</button>
+      </form>
+    </div>
+  </div>
+</main>
+</body>
+</html>

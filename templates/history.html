@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>History – {{ port.host_name }}:{{ port.port }}</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">◈</span>
+    <span class="brand-name">PortMonitor</span>
+  </div>
+  <div class="nav-links">
+    <a href="/">Dashboard</a>
+    <a href="/settings">Settings</a>
+  </div>
+</nav>
+
+<main class="container">
+  <div class="history-header">
+    <a href="/" class="back-link">← Back</a>
+    <h1>{{ port.host_name }}<span class="port-accent">:{{ port.port }}</span></h1>
+    <div class="host-ip-tag">{{ port.ip }}</div>
+    {% if port.label %}<div class="label-tag">{{ port.label }}</div>{% endif %}
+  </div>
+
+  <!-- Timeline bar -->
+  <div class="timeline-wrap">
+    <div class="timeline-label">Last 200 checks</div>
+    <div class="timeline-bar">
+      {% for c in checks | reverse %}
+      <div class="tl-seg {% if c.status == 1 %}tl-up{% else %}tl-down{% endif %}"
+           title="{{ c.checked_at }} – {{ c.response_ms }}ms"></div>
+      {% endfor %}
+    </div>
+    <div class="timeline-legend">
+      <span class="tl-up-legend">▪ UP</span>
+      <span class="tl-down-legend">▪ DOWN</span>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="history-table-wrap">
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th>Zeit (UTC)</th>
+          <th>Status</th>
+          <th>Response</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in checks %}
+        <tr class="{% if c.status == 1 %}row-up{% else %}row-down{% endif %}">
+          <td class="mono">{{ c.checked_at }}</td>
+          <td>
+            <span class="badge {% if c.status == 1 %}up{% else %}down{% endif %}">
+              {% if c.status == 1 %}UP{% else %}DOWN{% endif %}
+            </span>
+          </td>
+          <td class="mono">{{ c.response_ms }}ms</td>
+        </tr>
+        {% endfor %}
+        {% if not checks %}
+        <tr><td colspan="3" class="empty-row">Noch keine Checks aufgezeichnet.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</main>
+</body>
+</html>
