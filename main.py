@@ -22,6 +22,15 @@ logger = logging.getLogger(__name__)
 VALID_INTERVALS = {1, 2, 5, 10, 15, 30, 60}
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+WELL_KNOWN_PORTS: dict[int, str] = {
+    21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS",
+    80: "HTTP", 110: "POP3", 143: "IMAP", 443: "HTTPS", 445: "SMB",
+    587: "SMTP-TLS", 993: "IMAPS", 995: "POP3S", 1433: "MSSQL",
+    3306: "MySQL", 3389: "RDP", 5432: "PostgreSQL", 5900: "VNC",
+    6379: "Redis", 8080: "HTTP-Alt", 8443: "HTTPS-Alt",
+    9200: "Elasticsearch", 27017: "MongoDB",
+}
+
 DB_PATH = os.environ.get("DB_PATH", "portmonitor.db")
 
 # ── Database ─────────────────────────────────────────────────────────────────
@@ -270,6 +279,23 @@ async def add_host(name: str = Form(...), ip: str = Form(...), group_id: str = F
     conn.commit(); conn.close()
     return RedirectResponse("/", 303)
 
+@app.post("/hosts/scan-add")
+async def hosts_scan_add(ip: str = Form(...), name: str = Form(...),
+                         group_id: str = Form(""), ports: list[int] = Form(default=[])):
+    name = name.strip(); ip = ip.strip()
+    if not name or not ip:
+        raise HTTPException(400, "Name und IP dürfen nicht leer sein")
+    gid = int(group_id) if group_id.strip() else None
+    conn = get_db()
+    cursor = conn.execute("INSERT INTO hosts (name, ip, group_id) VALUES (?,?,?)", (name, ip, gid))
+    host_id = cursor.lastrowid
+    for port in ports:
+        label = WELL_KNOWN_PORTS.get(port, "")
+        conn.execute("INSERT INTO ports (host_id, port, label, check_interval, alert_email) VALUES (?,?,?,?,?)",
+                     (host_id, port, label, 5, ""))
+    conn.commit(); conn.close()
+    return RedirectResponse("/", 303)
+
 @app.post("/hosts/delete/{hid}")
 async def delete_host(hid: int):
     conn = get_db()
@@ -325,6 +351,31 @@ async def settings_page(request: Request):
     s = {r["key"]: r["value"] for r in conn.execute("SELECT * FROM settings").fetchall()}
     conn.close()
     return templates.TemplateResponse("settings.html", {"request": request, "settings": s})
+
+@app.post("/scan", response_class=HTMLResponse)
+async def scan_host(request: Request, ip: str = Form(...)):
+    ip = ip.strip()
+    if not ip:
+        raise HTTPException(400, "IP/Hostname darf nicht leer sein")
+    port_list = list(WELL_KNOWN_PORTS.items())
+    results = await asyncio.gather(
+        *[asyncio.to_thread(check_port, ip, p) for p, _ in port_list],
+        return_exceptions=True,
+    )
+    open_ports = []
+    for (port, label), result in zip(port_list, results):
+        if isinstance(result, Exception):
+            continue
+        ok, ms = result
+        if ok:
+            open_ports.append({"port": port, "label": label, "ms": ms})
+    conn = get_db()
+    groups_data = conn.execute("SELECT * FROM groups ORDER BY name").fetchall()
+    conn.close()
+    return templates.TemplateResponse("scan_results.html", {
+        "request": request, "ip": ip, "open_ports": open_ports,
+        "total_scanned": len(port_list), "groups": groups_data,
+    })
 
 @app.post("/settings/save")
 async def save_settings(smtp_host: str = Form(""), smtp_port: str = Form("587"),
