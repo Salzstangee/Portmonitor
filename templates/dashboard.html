@@ -98,9 +98,8 @@
           </div>
           {% endfor %}
 
-          <!-- Add Port (collapsible) -->
-          <details class="port-card port-add">
-            <summary class="port-add-summary">+ Port</summary>
+          <!-- Add Port -->
+          <div class="port-card port-add">
             <form action="/ports/add" method="post" class="add-port-form">
               <input type="hidden" name="host_id" value="{{ host.id }}">
               <input type="number" name="port" placeholder="Port" min="1" max="65535" required class="inp">
@@ -115,9 +114,9 @@
                 <option value="60">60 min</option>
               </select>
               <input type="email" name="alert_email" placeholder="Alert-Email (opt.)" class="inp">
-              <button type="submit" class="btn-add">Hinzufügen</button>
+              <button type="submit" class="btn-add">+ Port</button>
             </form>
-          </details>
+          </div>
         </div>
       </div>
     </details>
