@@ -1,0 +1,47 @@
+<div class="scan-results-card">
+  <div class="scan-header">
+    <span class="scan-ip">{{ ip }}</span>
+    <span class="scan-summary">
+      {% if open_ports %}
+        <span class="scan-open-count">{{ open_ports | length }}</span> / {{ total_scanned }} offen
+      {% else %}
+        Keine offenen Ports gefunden
+      {% endif %}
+    </span>
+  </div>
+
+  {% if open_ports %}
+    <div class="scan-ports">
+      {% for p in open_ports %}
+      <div class="scan-port-item">
+        <span class="scan-port-num">:{{ p.port }}</span>
+        <span class="scan-port-label">{{ p.label }}</span>
+        <span class="scan-port-ms">{{ p.ms }}ms</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <form action="/hosts/scan-add" method="post" class="scan-add-form">
+      <input type="hidden" name="ip" value="{{ ip }}">
+      <div class="scan-add-header">Host für Monitoring hinzufügen</div>
+      <input type="text" name="name" placeholder="Host-Name" value="{{ ip }}" required class="inp">
+      <select name="group_id" class="inp">
+        <option value="">Keine Gruppe</option>
+        {% for g in groups %}
+        <option value="{{ g.id }}">{{ g.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="scan-port-checks">
+        {% for p in open_ports %}
+        <label class="scan-check-label">
+          <input type="checkbox" name="ports" value="{{ p.port }}" checked>
+          :{{ p.port }} <span class="scan-check-label-name">{{ p.label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn-primary">Host + Ports hinzufügen</button>
+    </form>
+  {% else %}
+    <div class="scan-empty">Keine der {{ total_scanned }} Well-Known-Ports sind erreichbar.</div>
+  {% endif %}
+</div>

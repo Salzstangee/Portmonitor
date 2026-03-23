@@ -127,36 +127,39 @@
     <!-- Left: Main Content -->
     <div class="main-col">
 
+      <div id="scan-results"></div>
+
       {% set ungrouped_hosts = hosts | selectattr("group_id", "none") | list %}
 
       {% for group in groups %}
         {% set group_hosts = hosts | selectattr("group_id", "equalto", group.id) | list %}
-        {% if group_hosts %}
-          {# Group port summary #}
-          {% set ns = namespace(up=0, total=0) %}
-          {% for h in group_hosts %}
-            {% set hp = ports | selectattr("host_id", "equalto", h.id) | list %}
-            {% set ns.total = ns.total + (hp | length) %}
-            {% set ns.up = ns.up + (hp | selectattr("last_status", "equalto", 1) | list | length) %}
-          {% endfor %}
+        {# Group port summary #}
+        {% set ns = namespace(up=0, total=0) %}
+        {% for h in group_hosts %}
+          {% set hp = ports | selectattr("host_id", "equalto", h.id) | list %}
+          {% set ns.total = ns.total + (hp | length) %}
+          {% set ns.up = ns.up + (hp | selectattr("last_status", "equalto", 1) | list | length) %}
+        {% endfor %}
 
-          <section class="group-section">
-            <div class="group-header">
-              <h2>{{ group.name }}</h2>
-              {% if group.description %}<span class="group-desc">{{ group.description }}</span>{% endif %}
-              {% if ns.total > 0 %}
-                <span class="group-badge{% if ns.up < ns.total %} gb-warn{% endif %}">{{ ns.up }}/{{ ns.total }}</span>
-              {% endif %}
-              <form action="/groups/delete/{{ group.id }}" method="post" class="inline-form ml-auto">
-                <button type="submit" class="btn-icon danger" onclick="return confirm('Group löschen?')">✕</button>
-              </form>
-            </div>
-            {% for host in group_hosts %}
-              {% set host_ports = ports | selectattr("host_id", "equalto", host.id) | list %}
-              {{ render_host(host, host_ports, uptime) }}
-            {% endfor %}
-          </section>
-        {% endif %}
+        <section class="group-section">
+          <div class="group-header">
+            <h2>{{ group.name }}</h2>
+            {% if group.description %}<span class="group-desc">{{ group.description }}</span>{% endif %}
+            {% if ns.total > 0 %}
+              <span class="group-badge{% if ns.up < ns.total %} gb-warn{% endif %}">{{ ns.up }}/{{ ns.total }}</span>
+            {% endif %}
+            <form action="/groups/delete/{{ group.id }}" method="post" class="inline-form ml-auto">
+              <button type="submit" class="btn-icon danger" onclick="return confirm('Gruppe löschen?')">✕</button>
+            </form>
+          </div>
+          {% for host in group_hosts %}
+            {% set host_ports = ports | selectattr("host_id", "equalto", host.id) | list %}
+            {{ render_host(host, host_ports, uptime) }}
+          {% endfor %}
+          {% if not group_hosts %}
+            <div class="empty-group-msg">Keine Hosts in dieser Gruppe.</div>
+          {% endif %}
+        </section>
       {% endfor %}
 
       {% if ungrouped_hosts %}
@@ -179,6 +182,16 @@
 
     <!-- Right: Sidebar -->
     <aside class="sidebar">
+
+      <div class="sidebar-card">
+        <h3>⟳ Quick Scan</h3>
+        <form hx-post="/scan" hx-target="#scan-results" hx-swap="innerHTML"
+              hx-indicator="#scan-spinner" class="sidebar-form">
+          <input type="text" name="ip" placeholder="IP / Hostname" required class="inp">
+          <button type="submit" class="btn-primary">Scan Well-Known Ports</button>
+        </form>
+        <div id="scan-spinner" class="htmx-indicator scan-spinner-text">Scanning…</div>
+      </div>
 
       <div class="sidebar-card">
         <h3>+ Gruppe</h3>

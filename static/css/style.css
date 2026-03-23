@@ -564,6 +564,105 @@ select.inp { cursor: pointer; }
 .mono { font-family: var(--font-mono); }
 .empty-row { text-align: center; color: var(--text3); padding: 2rem !important; }
 
+/* ── Empty group ── */
+.empty-group-msg {
+  color: var(--text3);
+  font-size: 0.8rem;
+  padding: 0.6rem 0;
+  font-style: italic;
+}
+
+/* ── Scan spinner (htmx indicator) ── */
+.htmx-indicator { opacity: 0; transition: opacity 200ms ease-in; }
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator { opacity: 1; }
+.scan-spinner-text {
+  color: var(--text3);
+  font-size: 0.75rem;
+  margin-top: 0.4rem;
+  font-family: var(--font-mono);
+}
+
+/* ── Scan Results ── */
+.scan-results-card {
+  background: var(--bg2);
+  border: 1px solid var(--accent2);
+  border-radius: 12px;
+  padding: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+.scan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+.scan-ip {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.scan-summary { color: var(--text3); font-size: 0.75rem; }
+.scan-open-count { color: var(--up); font-weight: 700; }
+.scan-ports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+.scan-port-item {
+  background: var(--up-bg);
+  border: 1px solid var(--up-border);
+  border-radius: 6px;
+  padding: 0.25rem 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.scan-port-num { color: var(--up); font-weight: 700; }
+.scan-port-label { color: var(--text2); }
+.scan-port-ms { color: var(--text3); }
+.scan-add-header {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 0.3rem;
+}
+.scan-add-form { display: flex; flex-direction: column; gap: 0.5rem; }
+.scan-port-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.scan-check-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: var(--text2);
+}
+.scan-check-label:hover { color: var(--text); }
+.scan-check-label-name { color: var(--text3); }
+.scan-empty {
+  color: var(--text3);
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 0.5rem 0;
+}
+
 /* ── Settings ── */
 .settings-wrap { max-width: 600px; }
 .settings-wrap h1 { font-size: 1.8rem; font-weight: 800; margin-bottom: 1.5rem; }
