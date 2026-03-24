@@ -605,26 +605,27 @@ select.inp { cursor: pointer; }
 }
 .scan-summary { color: var(--text3); font-size: 0.75rem; }
 .scan-open-count { color: var(--up); font-weight: 700; }
-.scan-ports {
+.scan-ports-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  flex-direction: column;
+  gap: 0.3rem;
   margin-bottom: 1rem;
 }
-.scan-port-item {
+.scan-port-row {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
   background: var(--up-bg);
   border: 1px solid var(--up-border);
   border-radius: 6px;
-  padding: 0.25rem 0.55rem;
+  padding: 0.4rem 0.7rem;
   font-family: var(--font-mono);
-  font-size: 0.7rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  font-size: 0.78rem;
 }
 .scan-port-num { color: var(--up); font-weight: 700; }
 .scan-port-label { color: var(--text2); }
-.scan-port-ms { color: var(--text3); }
+.scan-port-ms { color: var(--text3); font-size: 0.7rem; text-align: right; }
 .scan-add-header {
   font-size: 0.72rem;
   font-weight: 700;
@@ -655,6 +656,7 @@ select.inp { cursor: pointer; }
   color: var(--text2);
 }
 .scan-check-label:hover { color: var(--text); }
+.scan-check-port { color: var(--up); font-weight: 700; min-width: 3rem; }
 .scan-check-label-name { color: var(--text3); }
 .scan-empty {
   color: var(--text3);
