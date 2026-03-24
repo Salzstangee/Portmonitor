@@ -1,7 +1,9 @@
 import asyncio
+import hashlib
 import logging
 import os
 import re
+import secrets
 import socket
 import smtplib
 import sqlite3
@@ -12,7 +14,7 @@ from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -67,6 +69,14 @@ def parse_port_range(port_range: str) -> list[tuple[int, str]]:
 
 DB_PATH = os.environ.get("DB_PATH", "portmonitor.db")
 _theme: str = "dark"
+_auth_enabled: bool = False
+_auth_password_hash: str = ""
+_auth_salt: str = ""
+_sessions: set[str] = set()
+
+
+def _hash_pw(password: str, salt: str) -> str:
+    return hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000).hex()
 
 # ── Database ─────────────────────────────────────────────────────────────────
 
@@ -117,6 +127,9 @@ def init_db():
         INSERT OR IGNORE INTO settings VALUES ('smtp_pass','');
         INSERT OR IGNORE INTO settings VALUES ('smtp_from','');
         INSERT OR IGNORE INTO settings VALUES ('theme','dark');
+        INSERT OR IGNORE INTO settings VALUES ('auth_enabled','0');
+        INSERT OR IGNORE INTO settings VALUES ('auth_password_hash','');
+        INSERT OR IGNORE INTO settings VALUES ('auth_salt','');
     """)
     # Add last_response_ms column if not present (migration for existing DBs)
     try:
@@ -130,11 +143,13 @@ def init_db():
     conn.execute("DELETE FROM ports WHERE host_id NOT IN (SELECT id FROM hosts)")
     conn.execute("DELETE FROM checks WHERE port_id NOT IN (SELECT id FROM ports)")
     conn.commit()
-    # Load cached theme
-    global _theme
-    row = conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()
-    if row:
-        _theme = row["value"]
+    # Load cached settings
+    global _theme, _auth_enabled, _auth_password_hash, _auth_salt
+    rows = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM settings").fetchall()}
+    _theme = rows.get("theme", "dark")
+    _auth_enabled = rows.get("auth_enabled", "0") == "1"
+    _auth_password_hash = rows.get("auth_password_hash", "")
+    _auth_salt = rows.get("auth_salt", "")
     conn.close()
 
 # ── Port Check ────────────────────────────────────────────────────────────────
@@ -247,6 +262,20 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    # Always allow login page, static assets
+    if path in ("/login", "/logout") or path.startswith("/static"):
+        return await call_next(request)
+    # Auth only active when enabled AND a password has been set
+    if _auth_enabled and _auth_password_hash:
+        token = request.cookies.get("pm_session")
+        if not token or token not in _sessions:
+            return RedirectResponse("/login", 303)
+    return await call_next(request)
+
+
 def _relative_time(dt_str: Optional[str]) -> str:
     if not dt_str:
         return "Never"
@@ -264,6 +293,7 @@ def _relative_time(dt_str: Optional[str]) -> str:
 
 templates.env.filters["relative_time"] = _relative_time
 templates.env.globals["current_theme"] = lambda: _theme
+templates.env.globals["auth_active"] = lambda: _auth_enabled and bool(_auth_password_hash)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -543,3 +573,62 @@ async def save_settings(smtp_host: str = Form(""), smtp_port: str = Form("587"),
         conn.execute("UPDATE settings SET value=? WHERE key=?", (v, k))
     conn.commit(); conn.close()
     return RedirectResponse("/settings", 303)
+
+
+@app.post("/settings/auth-toggle")
+async def auth_toggle(enabled: str = Form("0")):
+    global _auth_enabled, _sessions
+    new_val = "1" if enabled == "1" else "0"
+    _auth_enabled = new_val == "1"
+    if not _auth_enabled:
+        _sessions.clear()
+    conn = get_db()
+    conn.execute("UPDATE settings SET value=? WHERE key='auth_enabled'", (new_val,))
+    conn.commit(); conn.close()
+    return RedirectResponse("/settings", 303)
+
+
+@app.post("/settings/auth-password")
+async def auth_set_password(password: str = Form(...), password_confirm: str = Form(...)):
+    global _auth_password_hash, _auth_salt, _sessions
+    if password != password_confirm:
+        raise HTTPException(400, "Passwörter stimmen nicht überein")
+    if len(password) < 4:
+        raise HTTPException(400, "Passwort muss mindestens 4 Zeichen lang sein")
+    salt = secrets.token_hex(16)
+    pw_hash = _hash_pw(password, salt)
+    _auth_password_hash = pw_hash
+    _auth_salt = salt
+    _sessions.clear()  # invalidate all existing sessions
+    conn = get_db()
+    conn.execute("UPDATE settings SET value=? WHERE key='auth_password_hash'", (pw_hash,))
+    conn.execute("UPDATE settings SET value=? WHERE key='auth_salt'", (salt,))
+    conn.commit(); conn.close()
+    return RedirectResponse("/settings", 303)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+
+
+@app.post("/login", response_class=HTMLResponse)
+async def login_submit(request: Request, password: str = Form(...)):
+    if _auth_enabled and _auth_password_hash:
+        if _hash_pw(password, _auth_salt) == _auth_password_hash:
+            token = secrets.token_hex(32)
+            _sessions.add(token)
+            resp = RedirectResponse("/", 303)
+            resp.set_cookie("pm_session", token, httponly=True, samesite="lax")
+            return resp
+    return templates.TemplateResponse("login.html", {"request": request, "error": "Falsches Passwort"})
+
+
+@app.post("/logout")
+async def logout(request: Request):
+    token = request.cookies.get("pm_session")
+    if token:
+        _sessions.discard(token)
+    resp = RedirectResponse("/login", 303)
+    resp.delete_cookie("pm_session")
+    return resp

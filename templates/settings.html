@@ -15,6 +15,11 @@
   <div class="nav-links">
     <a href="/">Dashboard</a>
     <a href="/settings" class="active">Settings</a>
+    {% if auth_active() %}
+    <form action="/logout" method="post" style="display:inline">
+      <button type="submit" class="btn-secondary" style="padding:0.3rem 0.8rem;font-size:0.8rem">Abmelden</button>
+    </form>
+    {% endif %}
   </div>
 </nav>
 
@@ -37,6 +42,48 @@
           </button>
         </div>
       </form>
+    </div>
+
+    <div class="settings-card">
+      <h2>🔒 Zugriffsschutz</h2>
+      <p class="settings-hint">Schütze PortMonitor mit einem Passwort.</p>
+
+      <form action="/settings/auth-toggle" method="post" id="auth-toggle-form">
+        <div class="form-row toggle-row">
+          <label>Authentifizierung aktivieren</label>
+          <label class="toggle-switch">
+            <input type="checkbox" name="enabled" value="1"
+                   {% if settings.get('auth_enabled') == '1' %}checked{% endif %}
+                   onchange="this.form.submit()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </form>
+
+      {% if settings.get('auth_enabled') == '1' %}
+      <form action="/settings/auth-password" method="post" class="settings-form" style="margin-top:1.2rem">
+        <div class="form-row">
+          <label>Neues Passwort</label>
+          <input type="password" name="password" placeholder="••••••••" class="inp" required>
+        </div>
+        <div class="form-row">
+          <label>Bestätigen</label>
+          <input type="password" name="password_confirm" placeholder="••••••••" class="inp" required>
+        </div>
+        <button type="submit" class="btn-primary">Passwort setzen</button>
+      </form>
+      {% if settings.get('auth_password_hash') %}
+      <p class="settings-hint" style="margin-top:.6rem;color:var(--up)">Passwort ist gesetzt.</p>
+      {% else %}
+      <p class="settings-hint" style="margin-top:.6rem;color:var(--down)">Kein Passwort gesetzt – Schutz inaktiv bis ein Passwort gesetzt wird.</p>
+      {% endif %}
+      {% endif %}
+
+      {% if settings.get('auth_enabled') == '1' and settings.get('auth_password_hash') %}
+      <form action="/logout" method="post" style="margin-top:1rem">
+        <button type="submit" class="btn-secondary">Abmelden</button>
+      </form>
+      {% endif %}
     </div>
 
     <div class="settings-card">

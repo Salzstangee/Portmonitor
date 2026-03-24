@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="{{ current_theme() }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login – PortMonitor</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <span class="brand-icon">◈</span>
+      <span class="brand-name">PortMonitor</span>
+    </div>
+    <p class="login-hint">Bitte Passwort eingeben</p>
+    {% if error %}
+    <div class="login-error">{{ error }}</div>
+    {% endif %}
+    <form action="/login" method="post" class="login-form">
+      <input type="password" name="password" placeholder="Passwort" class="inp" autofocus required>
+      <button type="submit" class="btn-primary login-btn">Anmelden</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

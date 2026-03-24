@@ -16,6 +16,11 @@
   <div class="nav-links">
     <a href="/" class="active">Dashboard</a>
     <a href="/settings">Settings</a>
+    {% if auth_active() %}
+    <form action="/logout" method="post" style="display:inline">
+      <button type="submit" class="btn-secondary" style="padding:0.3rem 0.8rem;font-size:0.8rem">Abmelden</button>
+    </form>
+    {% endif %}
   </div>
 </nav>
 
