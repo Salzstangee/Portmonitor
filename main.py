@@ -70,6 +70,7 @@ DB_PATH = os.environ.get("DB_PATH", "portmonitor.db")
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 def init_db():
@@ -113,6 +114,11 @@ def init_db():
         INSERT OR IGNORE INTO settings VALUES ('smtp_pass','');
         INSERT OR IGNORE INTO settings VALUES ('smtp_from','');
     """)
+    # Clean up orphaned rows from before foreign_keys was enabled
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("UPDATE hosts SET group_id = NULL WHERE group_id IS NOT NULL AND group_id NOT IN (SELECT id FROM groups)")
+    conn.execute("DELETE FROM ports WHERE host_id NOT IN (SELECT id FROM hosts)")
+    conn.execute("DELETE FROM checks WHERE port_id NOT IN (SELECT id FROM ports)")
     conn.commit()
     conn.close()
 
@@ -386,10 +392,7 @@ async def settings_page(request: Request):
 
 @app.get("/stats", response_class=HTMLResponse)
 async def stats(request: Request):
-    conn = get_db()
-    ports = conn.execute("SELECT * FROM ports").fetchall()
-    hosts = conn.execute("SELECT * FROM hosts").fetchall()
-    conn.close()
+    groups, hosts, ports, uptime = get_dashboard_data()
     return templates.TemplateResponse("stats_bar.html", {
         "request": request, "ports": ports, "hosts": hosts,
     })
