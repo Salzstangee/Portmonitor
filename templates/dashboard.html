@@ -47,6 +47,7 @@
               <span class="hs-up">{{ up_c }}</span>/{{ host_ports | length }} UP
             </span>
           {% endif %}
+          <a href="/hosts/edit/{{ host.id }}" class="btn-history">Edit</a>
           <form action="/hosts/delete/{{ host.id }}" method="post" class="inline-form">
             <button type="submit" class="btn-icon danger" onclick="return confirm('Host löschen?')">✕</button>
           </form>
@@ -66,11 +67,13 @@
             {% if p.label %}<div class="port-label">{{ p.label }}</div>{% endif %}
             <div class="port-meta">
               <span class="uptime-badge">{% if uptime[p.id] >= 0 %}{{ uptime[p.id] }}% 24h{% else %}No data{% endif %}</span>
-              <span id="ms-{{ p.id }}" class="ms-badge">{% if p.last_checked %}checked{% endif %}</span>
+              <span id="ms-{{ p.id }}" class="ms-badge {% if p.last_response_ms is not none %}{% if p.last_response_ms <= 50 %}ms-fast{% elif p.last_response_ms <= 200 %}ms-medium{% else %}ms-slow{% endif %}{% endif %}">{% if p.last_response_ms is not none %}{{ p.last_response_ms }}ms{% endif %}</span>
             </div>
+            <div class="port-checked">{{ p.last_checked | relative_time }}</div>
             <div class="port-actions">
               <button hx-post="/ports/check/{{ p.id }}" hx-target="#ms-{{ p.id }}" hx-swap="outerHTML" class="btn-check">⟳ Check</button>
               <a href="/history/{{ p.id }}" class="btn-history">History</a>
+              <a href="/ports/edit/{{ p.id }}" class="btn-history">Edit</a>
               <form action="/ports/delete/{{ p.id }}" method="post" class="inline-form">
                 <button type="submit" class="btn-icon danger">✕</button>
               </form>

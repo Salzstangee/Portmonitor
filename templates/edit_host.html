@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edit Host – {{ host.name }}</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">◈</span>
+    <span class="brand-name">PortMonitor</span>
+  </div>
+  <div class="nav-links">
+    <a href="/">Dashboard</a>
+    <a href="/settings">Settings</a>
+  </div>
+</nav>
+
+<main class="container">
+  <div class="history-header">
+    <a href="/" class="back-link">← Back</a>
+    <h1>{{ host.name }}</h1>
+    <div class="host-ip-tag">Edit Host</div>
+  </div>
+
+  <div class="settings-wrap">
+    <div class="settings-card">
+      <form action="/hosts/edit/{{ host.id }}" method="post" class="settings-form">
+        <div class="form-row">
+          <label>Name</label>
+          <input type="text" name="name" value="{{ host.name }}" required class="inp">
+        </div>
+        <div class="form-row">
+          <label>IP / Hostname</label>
+          <input type="text" name="ip" value="{{ host.ip }}" required class="inp">
+        </div>
+        <div class="form-row">
+          <label>Group</label>
+          <select name="group_id" class="inp">
+            <option value="">No Group</option>
+            {% for g in groups %}
+            <option value="{{ g.id }}" {% if host.group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn-primary">Save</button>
+      </form>
+    </div>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edit Port – {{ port.host_name }}:{{ port.port }}</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">◈</span>
+    <span class="brand-name">PortMonitor</span>
+  </div>
+  <div class="nav-links">
+    <a href="/">Dashboard</a>
+    <a href="/settings">Settings</a>
+  </div>
+</nav>
+
+<main class="container">
+  <div class="history-header">
+    <a href="/" class="back-link">← Back</a>
+    <h1>{{ port.host_name }}<span class="port-accent">:{{ port.port }}</span></h1>
+    <div class="host-ip-tag">Edit Port</div>
+  </div>
+
+  <div class="settings-wrap">
+    <div class="settings-card">
+      <form action="/ports/edit/{{ port.id }}" method="post" class="settings-form">
+        <div class="form-row">
+          <label>Label</label>
+          <input type="text" name="label" value="{{ port.label }}" placeholder="e.g. HTTP" class="inp">
+        </div>
+        <div class="form-row">
+          <label>Check Interval</label>
+          <select name="check_interval" class="inp">
+            {% for i in intervals %}
+            <option value="{{ i }}" {% if port.check_interval == i %}selected{% endif %}>{{ i }} min</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Alert Email</label>
+          <input type="email" name="alert_email" value="{{ port.alert_email }}" placeholder="alerts@example.com" class="inp">
+        </div>
+        <button type="submit" class="btn-primary">Save</button>
+      </form>
+    </div>
+  </div>
+</main>
+</body>
+</html>

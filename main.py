@@ -24,6 +24,16 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MAX_SCAN_PORTS = 500
 
 
+WELL_KNOWN_PORTS: dict[int, str] = {
+    21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS",
+    80: "HTTP", 110: "POP3", 143: "IMAP", 443: "HTTPS", 445: "SMB",
+    587: "SMTP-TLS", 993: "IMAPS", 995: "POP3S", 1433: "MSSQL",
+    3306: "MySQL", 3389: "RDP", 5432: "PostgreSQL", 5900: "VNC",
+    6379: "Redis", 8080: "HTTP-Alt", 8443: "HTTPS-Alt",
+    9200: "Elasticsearch", 27017: "MongoDB",
+}
+
+
 def parse_port_range(port_range: str) -> list[tuple[int, str]]:
     """Parse '1-1000' or '80,443,8080' into (port, label) tuples, max MAX_SCAN_PORTS."""
     ports: list[tuple[int, str]] = []
@@ -54,14 +64,6 @@ def parse_port_range(port_range: str) -> list[tuple[int, str]]:
                 continue
     return ports
 
-WELL_KNOWN_PORTS: dict[int, str] = {
-    21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS",
-    80: "HTTP", 110: "POP3", 143: "IMAP", 443: "HTTPS", 445: "SMB",
-    587: "SMTP-TLS", 993: "IMAPS", 995: "POP3S", 1433: "MSSQL",
-    3306: "MySQL", 3389: "RDP", 5432: "PostgreSQL", 5900: "VNC",
-    6379: "Redis", 8080: "HTTP-Alt", 8443: "HTTPS-Alt",
-    9200: "Elasticsearch", 27017: "MongoDB",
-}
 
 DB_PATH = os.environ.get("DB_PATH", "portmonitor.db")
 
@@ -114,6 +116,12 @@ def init_db():
         INSERT OR IGNORE INTO settings VALUES ('smtp_pass','');
         INSERT OR IGNORE INTO settings VALUES ('smtp_from','');
     """)
+    # Add last_response_ms column if not present (migration for existing DBs)
+    try:
+        conn.execute("ALTER TABLE ports ADD COLUMN last_response_ms INTEGER DEFAULT NULL")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     # Clean up orphaned rows from before foreign_keys was enabled
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("UPDATE hosts SET group_id = NULL WHERE group_id IS NOT NULL AND group_id NOT IN (SELECT id FROM groups)")
@@ -196,8 +204,8 @@ async def run_checks_for_interval(interval: int):
         # Alert on state change
         if p["last_status"] != -1 and p["last_status"] != status and p["alert_email"]:
             send_alert(p["alert_email"], p["host_name"], p["ip"], p["port"], ok, settings)
-        conn.execute("UPDATE ports SET last_status=?, last_checked=? WHERE id=?",
-                     (status, now, p["id"]))
+        conn.execute("UPDATE ports SET last_status=?, last_checked=?, last_response_ms=? WHERE id=?",
+                     (status, now, ms, p["id"]))
         # Keep only last 1000 checks per port
         conn.execute("""DELETE FROM checks WHERE port_id=? AND id NOT IN (
             SELECT id FROM checks WHERE port_id=? ORDER BY id DESC LIMIT 1000)""",
@@ -231,6 +239,24 @@ app = FastAPI(lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
+
+def _relative_time(dt_str: str | None) -> str:
+    if not dt_str:
+        return "Never"
+    try:
+        dt = datetime.fromisoformat(dt_str).replace(tzinfo=timezone.utc)
+        diff = int((datetime.now(timezone.utc) - dt).total_seconds())
+        if diff < 60:
+            return f"{diff}s ago"
+        if diff < 3600:
+            return f"{diff // 60}m ago"
+        return f"{diff // 3600}h ago"
+    except Exception:
+        return dt_str
+
+
+templates.env.filters["relative_time"] = _relative_time
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def get_dashboard_data():
@@ -243,16 +269,17 @@ def get_dashboard_data():
         ORDER BY h.name, p.port
     """).fetchall()
 
-    # Uptime % last 24h per port
-    uptime = {}
+    # Uptime % last 24h per port (single query instead of N queries)
+    uptime_rows = conn.execute("""
+        SELECT port_id,
+               COUNT(*) AS total,
+               SUM(CASE WHEN status=1 THEN 1 ELSE 0 END) AS up
+        FROM checks WHERE checked_at >= datetime('now','-1 day')
+        GROUP BY port_id
+    """).fetchall()
+    uptime = {r["port_id"]: round(r["up"] / r["total"] * 100, 1) for r in uptime_rows}
     for p in ports:
-        rows = conn.execute("""
-            SELECT COUNT(*) total,
-                   SUM(CASE WHEN status=1 THEN 1 ELSE 0 END) up
-            FROM checks WHERE port_id=? AND checked_at >= datetime('now','-1 day')
-        """, (p["id"],)).fetchone()
-        total, up = rows["total"], rows["up"] or 0
-        uptime[p["id"]] = round((up / total * 100) if total > 0 else -1, 1)
+        uptime.setdefault(p["id"], -1)
 
     conn.close()
     return groups, hosts, ports, uptime
@@ -334,6 +361,29 @@ async def hosts_scan_add(ip: str = Form(...), name: str = Form(...),
     conn.commit(); conn.close()
     return RedirectResponse("/", 303)
 
+@app.get("/hosts/edit/{hid}", response_class=HTMLResponse)
+async def edit_host_page(request: Request, hid: int):
+    conn = get_db()
+    host = conn.execute("SELECT * FROM hosts WHERE id=?", (hid,)).fetchone()
+    groups = conn.execute("SELECT * FROM groups ORDER BY name").fetchall()
+    conn.close()
+    if not host:
+        raise HTTPException(404)
+    return templates.TemplateResponse("edit_host.html", {"request": request, "host": host, "groups": groups})
+
+@app.post("/hosts/edit/{hid}")
+async def edit_host(hid: int, name: str = Form(...), ip: str = Form(...), group_id: str = Form("")):
+    name = name.strip(); ip = ip.strip()
+    if not name:
+        raise HTTPException(400, "Hostname darf nicht leer sein")
+    if not ip:
+        raise HTTPException(400, "IP/Hostname darf nicht leer sein")
+    gid = int(group_id) if group_id.strip() else None
+    conn = get_db()
+    conn.execute("UPDATE hosts SET name=?, ip=?, group_id=? WHERE id=?", (name, ip, gid, hid))
+    conn.commit(); conn.close()
+    return RedirectResponse("/", 303)
+
 @app.post("/hosts/delete/{hid}")
 async def delete_host(hid: int):
     conn = get_db()
@@ -359,6 +409,32 @@ async def add_port(host_id: int = Form(...), port: int = Form(...),
     conn.commit(); conn.close()
     return RedirectResponse("/", 303)
 
+@app.get("/ports/edit/{pid}", response_class=HTMLResponse)
+async def edit_port_page(request: Request, pid: int):
+    conn = get_db()
+    p = conn.execute("""
+        SELECT p.*, h.name as host_name FROM ports p
+        JOIN hosts h ON h.id=p.host_id WHERE p.id=?
+    """, (pid,)).fetchone()
+    conn.close()
+    if not p:
+        raise HTTPException(404)
+    return templates.TemplateResponse("edit_port.html", {"request": request, "port": p, "intervals": sorted(VALID_INTERVALS)})
+
+@app.post("/ports/edit/{pid}")
+async def edit_port(pid: int, label: str = Form(""), check_interval: int = Form(5),
+                    alert_email: str = Form("")):
+    if check_interval not in VALID_INTERVALS:
+        raise HTTPException(400, f"Ungültiges Intervall: {check_interval}")
+    alert_email = alert_email.strip()
+    if alert_email and not _EMAIL_RE.match(alert_email):
+        raise HTTPException(400, "Ungültige E-Mail-Adresse")
+    conn = get_db()
+    conn.execute("UPDATE ports SET label=?, check_interval=?, alert_email=? WHERE id=?",
+                 (label.strip(), check_interval, alert_email, pid))
+    conn.commit(); conn.close()
+    return RedirectResponse("/", 303)
+
 @app.post("/ports/delete/{pid}")
 async def delete_port(pid: int):
     conn = get_db()
@@ -376,11 +452,12 @@ async def manual_check(request: Request, pid: int):
     status = 1 if ok else 0
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     conn.execute("INSERT INTO checks (port_id, status, response_ms, checked_at) VALUES (?,?,?,?)", (pid, status, ms, now))
-    conn.execute("UPDATE ports SET last_status=?, last_checked=? WHERE id=?", (status, now, pid))
+    conn.execute("UPDATE ports SET last_status=?, last_checked=?, last_response_ms=? WHERE id=?", (status, now, ms, pid))
     conn.commit(); conn.close()
+    ms_class = "ms-fast" if ms <= 50 else ("ms-medium" if ms <= 200 else "ms-slow")
     return HTMLResponse(f'<span hx-swap-oob="true" id="status-{pid}">' +
                         ('<span class="badge up">UP</span>' if ok else '<span class="badge down">DOWN</span>') +
-                        f'</span><span id="ms-{pid}">{ms}ms</span>')
+                        f'</span><span id="ms-{pid}" class="ms-badge {ms_class}">{ms}ms</span>')
 
 # Settings
 @app.get("/settings", response_class=HTMLResponse)

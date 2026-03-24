@@ -296,6 +296,12 @@ details.host-block[open] > .host-header .host-chevron { transform: rotate(90deg)
 .port-up { border-color: var(--up-border); }
 .port-down { border-color: var(--down-border); }
 
+/* Dynamic card styling reacts to badge changes (e.g. after manual check via htmx) */
+.port-card:has(.badge.up) { border-color: var(--up-border); }
+.port-card:has(.badge.up)::before { background: var(--up); box-shadow: 0 0 8px var(--up); }
+.port-card:has(.badge.down) { border-color: var(--down-border); }
+.port-card:has(.badge.down)::before { background: var(--down); box-shadow: 0 0 8px var(--down); }
+
 .port-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
 .port-num { font-family: var(--font-mono); font-size: 1rem; font-weight: 700; color: var(--text); }
 .port-label { font-size: 0.72rem; color: var(--text2); margin-bottom: 0.4rem; }
@@ -314,6 +320,16 @@ details.host-block[open] > .host-header .host-chevron { transform: rotate(90deg)
   font-family: var(--font-mono);
   font-size: 0.65rem;
   color: var(--accent2);
+}
+.ms-fast { color: var(--up); }
+.ms-medium { color: #f0c040; }
+.ms-slow { color: var(--down); }
+
+.port-checked {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text3);
+  margin-bottom: 0.4rem;
 }
 
 .port-actions { display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; }
