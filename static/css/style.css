@@ -22,6 +22,27 @@
   --font-ui: 'Syne', sans-serif;
 }
 
+/* ── Light Theme ── */
+[data-theme="light"] {
+  --bg: #f0f3f7;
+  --bg2: #ffffff;
+  --bg3: #e8ecf2;
+  --border: #d0d8e4;
+  --border2: #b0bdd0;
+  --text: #1a2332;
+  --text2: #3a4f66;
+  --text3: #7a8fa6;
+  --accent: #0088aa;
+  --accent2: #006688;
+  --up: #00994d;
+  --up-bg: #00994d12;
+  --up-border: #00994d35;
+  --down: #cc2244;
+  --down-bg: #cc224412;
+  --down-border: #cc224435;
+  --unknown: #5a6e82;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -695,3 +716,33 @@ select.inp { cursor: pointer; }
 .settings-form { display: flex; flex-direction: column; gap: 0.75rem; }
 .form-row { display: flex; flex-direction: column; gap: 0.3rem; }
 .form-row label { font-size: 0.75rem; font-weight: 600; color: var(--text2); letter-spacing: 0.05em; }
+.settings-card + .settings-card { margin-top: 1rem; }
+
+/* ── Theme Toggle ── */
+.theme-toggle {
+  display: flex;
+  gap: 0.5rem;
+}
+.theme-btn {
+  flex: 1;
+  padding: 0.6rem;
+  border-radius: 8px;
+  border: 2px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.05em;
+}
+.theme-btn:hover { border-color: var(--accent); color: var(--accent); }
+.theme-btn.active { border-color: var(--accent); background: #00d4ff15; color: var(--accent); }
+
+/* Light theme body background */
+[data-theme="light"] body {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, #0088aa08, transparent),
+    linear-gradient(180deg, #f0f3f7 0%, #e8ecf2 100%);
+}

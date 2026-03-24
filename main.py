@@ -66,6 +66,7 @@ def parse_port_range(port_range: str) -> list[tuple[int, str]]:
 
 
 DB_PATH = os.environ.get("DB_PATH", "portmonitor.db")
+_theme: str = "dark"
 
 # ── Database ─────────────────────────────────────────────────────────────────
 
@@ -115,6 +116,7 @@ def init_db():
         INSERT OR IGNORE INTO settings VALUES ('smtp_user','');
         INSERT OR IGNORE INTO settings VALUES ('smtp_pass','');
         INSERT OR IGNORE INTO settings VALUES ('smtp_from','');
+        INSERT OR IGNORE INTO settings VALUES ('theme','dark');
     """)
     # Add last_response_ms column if not present (migration for existing DBs)
     try:
@@ -128,6 +130,11 @@ def init_db():
     conn.execute("DELETE FROM ports WHERE host_id NOT IN (SELECT id FROM hosts)")
     conn.execute("DELETE FROM checks WHERE port_id NOT IN (SELECT id FROM ports)")
     conn.commit()
+    # Load cached theme
+    global _theme
+    row = conn.execute("SELECT value FROM settings WHERE key='theme'").fetchone()
+    if row:
+        _theme = row["value"]
     conn.close()
 
 # ── Port Check ────────────────────────────────────────────────────────────────
@@ -240,7 +247,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 
-def _relative_time(dt_str: str | None) -> str:
+def _relative_time(dt_str: Optional[str]) -> str:
     if not dt_str:
         return "Never"
     try:
@@ -256,6 +263,7 @@ def _relative_time(dt_str: str | None) -> str:
 
 
 templates.env.filters["relative_time"] = _relative_time
+templates.env.globals["current_theme"] = lambda: _theme
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -506,6 +514,17 @@ async def scan_host(request: Request, ip: str = Form(...),
         "request": request, "ip": ip, "open_ports": open_ports,
         "total_scanned": len(port_list), "groups": groups_data,
     })
+
+@app.post("/settings/theme")
+async def save_theme(theme: str = Form("dark")):
+    global _theme
+    if theme not in ("dark", "light"):
+        raise HTTPException(400, "Invalid theme")
+    _theme = theme
+    conn = get_db()
+    conn.execute("UPDATE settings SET value=? WHERE key='theme'", (theme,))
+    conn.commit(); conn.close()
+    return RedirectResponse("/settings", 303)
 
 @app.post("/settings/save")
 async def save_settings(smtp_host: str = Form(""), smtp_port: str = Form("587"),

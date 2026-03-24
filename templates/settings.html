@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" data-theme="{{ current_theme() }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,6 +21,23 @@
 <main class="container">
   <div class="settings-wrap">
     <h1>Settings</h1>
+
+    <div class="settings-card">
+      <h2>🎨 Appearance</h2>
+      <p class="settings-hint">Choose between dark and light mode.</p>
+      <form action="/settings/theme" method="post">
+        <div class="theme-toggle">
+          <button type="submit" name="theme" value="dark"
+                  class="theme-btn {% if settings.get('theme', 'dark') == 'dark' %}active{% endif %}">
+            ◐ Dark
+          </button>
+          <button type="submit" name="theme" value="light"
+                  class="theme-btn {% if settings.get('theme') == 'light' %}active{% endif %}">
+            ○ Light
+          </button>
+        </div>
+      </form>
+    </div>
 
     <div class="settings-card">
       <h2>📧 E-Mail Alerts (SMTP)</h2>
