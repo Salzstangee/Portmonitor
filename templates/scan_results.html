@@ -11,11 +11,11 @@
   </div>
 
   {% if open_ports %}
-    <div class="scan-ports">
+    <div class="scan-ports-list">
       {% for p in open_ports %}
-      <div class="scan-port-item">
-        <span class="scan-port-num">:{{ p.port }}</span>
-        <span class="scan-port-label">{{ p.label }}</span>
+      <div class="scan-port-row">
+        <span class="scan-port-num">{{ p.port }}</span>
+        <span class="scan-port-label">{{ p.label if p.label else "—" }}</span>
         <span class="scan-port-ms">{{ p.ms }}ms</span>
       </div>
       {% endfor %}
@@ -35,13 +35,14 @@
         {% for p in open_ports %}
         <label class="scan-check-label">
           <input type="checkbox" name="ports" value="{{ p.port }}" checked>
-          :{{ p.port }} <span class="scan-check-label-name">{{ p.label }}</span>
+          <span class="scan-check-port">:{{ p.port }}</span>
+          <span class="scan-check-label-name">{{ p.label if p.label else "Unknown" }}</span>
         </label>
         {% endfor %}
       </div>
       <button type="submit" class="btn-primary">Host + Ports hinzufügen</button>
     </form>
   {% else %}
-    <div class="scan-empty">Keine der {{ total_scanned }} Well-Known-Ports sind erreichbar.</div>
+    <div class="scan-empty">Keine der {{ total_scanned }} gescannten Ports sind erreichbar.</div>
   {% endif %}
 </div>

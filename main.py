@@ -21,6 +21,38 @@ logger = logging.getLogger(__name__)
 
 VALID_INTERVALS = {1, 2, 5, 10, 15, 30, 60}
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+MAX_SCAN_PORTS = 500
+
+
+def parse_port_range(port_range: str) -> list[tuple[int, str]]:
+    """Parse '1-1000' or '80,443,8080' into (port, label) tuples, max MAX_SCAN_PORTS."""
+    ports: list[tuple[int, str]] = []
+    seen: set[int] = set()
+    for part in port_range.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            try:
+                a, b = part.split("-", 1)
+                start, end = max(1, int(a.strip())), min(65535, int(b.strip()))
+                for p in range(start, end + 1):
+                    if p not in seen:
+                        seen.add(p)
+                        ports.append((p, WELL_KNOWN_PORTS.get(p, "")))
+                        if len(ports) >= MAX_SCAN_PORTS:
+                            return ports
+            except ValueError:
+                continue
+        else:
+            try:
+                p = int(part)
+                if 1 <= p <= 65535 and p not in seen:
+                    seen.add(p)
+                    ports.append((p, WELL_KNOWN_PORTS.get(p, "")))
+            except ValueError:
+                continue
+    return ports
 
 WELL_KNOWN_PORTS: dict[int, str] = {
     21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS",
@@ -352,12 +384,30 @@ async def settings_page(request: Request):
     conn.close()
     return templates.TemplateResponse("settings.html", {"request": request, "settings": s})
 
+@app.get("/stats", response_class=HTMLResponse)
+async def stats(request: Request):
+    conn = get_db()
+    ports = conn.execute("SELECT * FROM ports").fetchall()
+    hosts = conn.execute("SELECT * FROM hosts").fetchall()
+    conn.close()
+    return templates.TemplateResponse("stats_bar.html", {
+        "request": request, "ports": ports, "hosts": hosts,
+    })
+
+
 @app.post("/scan", response_class=HTMLResponse)
-async def scan_host(request: Request, ip: str = Form(...)):
+async def scan_host(request: Request, ip: str = Form(...),
+                    scan_mode: str = Form("wellknown"),
+                    port_range: str = Form("")):
     ip = ip.strip()
     if not ip:
         raise HTTPException(400, "IP/Hostname darf nicht leer sein")
-    port_list = list(WELL_KNOWN_PORTS.items())
+    if scan_mode == "custom" and port_range.strip():
+        port_list = parse_port_range(port_range.strip())
+        if not port_list:
+            raise HTTPException(400, "Kein gültiger Port-Bereich angegeben")
+    else:
+        port_list = list(WELL_KNOWN_PORTS.items())
     results = await asyncio.gather(
         *[asyncio.to_thread(check_port, ip, p) for p, _ in port_list],
         return_exceptions=True,

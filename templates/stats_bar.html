@@ -1,0 +1,21 @@
+{% set total_ports = ports | length %}
+{% set up_ports = ports | selectattr("last_status", "equalto", 1) | list | length %}
+{% set down_ports = ports | selectattr("last_status", "equalto", 0) | list | length %}
+<div id="stats-bar" class="stats-bar" hx-get="/stats" hx-trigger="every 10s" hx-swap="outerHTML">
+  <div class="stat-card">
+    <div class="stat-value">{{ total_ports }}</div>
+    <div class="stat-label">Total Ports</div>
+  </div>
+  <div class="stat-card stat-up">
+    <div class="stat-value">{{ up_ports }}</div>
+    <div class="stat-label">Online</div>
+  </div>
+  <div class="stat-card stat-down">
+    <div class="stat-value">{{ down_ports }}</div>
+    <div class="stat-label">Offline</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ hosts | length }}</div>
+    <div class="stat-label">Hosts</div>
+  </div>
+</div>

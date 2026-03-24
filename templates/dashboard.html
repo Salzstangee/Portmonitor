@@ -22,27 +22,7 @@
 <main class="container">
 
   <!-- Stats Bar -->
-  {% set total_ports = ports | length %}
-  {% set up_ports = ports | selectattr("last_status", "equalto", 1) | list | length %}
-  {% set down_ports = ports | selectattr("last_status", "equalto", 0) | list | length %}
-  <div class="stats-bar">
-    <div class="stat-card">
-      <div class="stat-value">{{ total_ports }}</div>
-      <div class="stat-label">Total Ports</div>
-    </div>
-    <div class="stat-card stat-up">
-      <div class="stat-value">{{ up_ports }}</div>
-      <div class="stat-label">Online</div>
-    </div>
-    <div class="stat-card stat-down">
-      <div class="stat-value">{{ down_ports }}</div>
-      <div class="stat-label">Offline</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">{{ hosts | length }}</div>
-      <div class="stat-label">Hosts</div>
-    </div>
-  </div>
+  {% include "stats_bar.html" %}
 
   <!-- ── Host Block Macro ── -->
   {% macro render_host(host, host_ports, uptime) %}
@@ -188,7 +168,12 @@
         <form hx-post="/scan" hx-target="#scan-results" hx-swap="innerHTML"
               hx-indicator="#scan-spinner" class="sidebar-form">
           <input type="text" name="ip" placeholder="IP / Hostname" required class="inp">
-          <button type="submit" class="btn-primary">Scan Well-Known Ports</button>
+          <select name="scan_mode" class="inp" onchange="document.getElementById('custom-range').style.display=this.value==='custom'?'flex':'none'">
+            <option value="wellknown">Well-Known (23 Ports)</option>
+            <option value="custom">Custom Range / Ports</option>
+          </select>
+          <input type="text" name="port_range" id="custom-range" placeholder="z.B. 1-1000 oder 80,443,8080" class="inp" style="display:none">
+          <button type="submit" class="btn-primary">Scan starten</button>
         </form>
         <div id="scan-spinner" class="htmx-indicator scan-spinner-text">Scanning…</div>
       </div>
